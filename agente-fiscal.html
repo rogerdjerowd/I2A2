@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Agente de Notas Fiscais</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #app {
+      background: white;
+      padding: 2em;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 400px;
+    }
+    input, button {
+      width: 100%;
+      padding: 1em;
+      margin-top: 10px;
+      font-size: 1em;
+    }
+    #resposta {
+      margin-top: 20px;
+      background: #eef;
+      padding: 1em;
+      border-radius: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h2>Faça sua pergunta sobre as Notas Fiscais</h2>
+    <input type="text" id="pergunta" placeholder="Ex: Qual fornecedor recebeu mais?">
+    <button onclick="enviarPergunta()">Enviar</button>
+    <div id="resposta"></div>
+  </div>
+
+  <script>
+    async function enviarPergunta() {
+      const pergunta = document.getElementById("pergunta").value;
+      const respostaDiv = document.getElementById("resposta");
+      respostaDiv.style.display = "none";
+      respostaDiv.innerHTML = "Processando...";
+
+      try {
+        const response = await fetch('http://localhost:5678/webhook/pergunta-notas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pergunta })
+        });
+
+        const data = await response.json();
+        respostaDiv.innerHTML = `<strong>Resposta:</strong> ${data.resposta || JSON.stringify(data)}`;
+        respostaDiv.style.display = "block";
+      } catch (error) {
+        respostaDiv.innerHTML = "Erro ao obter resposta. Verifique a conexão com o agente.";
+        respostaDiv.style.display = "block";
+      }
+    }
+  </script>
+</body>
+</html>
