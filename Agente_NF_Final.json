@@ -1,0 +1,184 @@
+{
+  "name": "Agente-NF-Final",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://github.com/rogerdjerowd/I2A2/raw/main/202401_NFs.zip",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "id": "5a269879-0805-45b3-a351-dd778fbb372b",
+      "name": "Baixar ZIP GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        1320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4716efce-2934-437b-b131-e6e0abf73a42",
+      "name": "Descompactar ZIP",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"message\": \"{{ $node[\\\"OpenAI\\\"].json.choices[0].message.content }}\"\n}\n",
+        "options": {}
+      },
+      "id": "8e9aa95d-3553-406a-9ce2-f93e397a4f83",
+      "name": "Resposta para Usuário",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "🧾 **Bem-vindo ao Agente NFe!**\n\nSou especialista em análise de Notas Fiscais Eletrônicas. Posso ajudar você com:\n\n- 📊 **Análise de fornecedores e faturamento**\n- 📦 **Volumes e quantidades de produtos** \n- 💰 **Valores totais e médias**\n- 🔍 **Detecção de inconsistências fiscais**\n\n**Exemplos de perguntas:**\n- \"Qual fornecedor teve maior faturamento?\"\n- \"Quantas notas fiscais foram emitidas?\"\n- \"Qual produto teve maior volume de vendas?\"\n\nO que você gostaria de saber sobre os documentos fiscais?",
+        "options": {
+          "inputPlaceholder": "Digite sua pergunta sobre as NFe...",
+          "subtitle": "Análise Inteligente de Documentos Fiscais",
+          "title": "🧾 Agente NFe"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -460,
+        1320
+      ],
+      "id": "203cabff-df19-4b97-bf4d-a378c9d5df6e",
+      "name": "When chat message received",
+      "webhookId": "7d6d8aca-be3c-417b-8254-6e3d18906261"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4-turbo",
+          "mode": "list",
+          "cachedResultName": "GPT-4-TURBO"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.messages[0].content }}",
+              "role": "=system"
+            },
+            {
+              "content": "={{ $json.messages[1].content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        380,
+        1320
+      ],
+      "id": "67513d5e-1082-4d61-8a08-3154094bc991",
+      "name": "OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "AZIyNeazCJhB4oPY",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Este nó espera que 'items' contenha os arquivos binários descompactados (cabeçalho e itens).\n// E precisa capturar o chatInput do nó 'When chat message received'.\n\nlet headerCsvContent = '';\nlet itemsCsvContent = '';\nlet chatInput = '';\n\n// 1. Encontrar o chatInput do nó inicial\n// Acessa diretamente o chatInput do nó 'When chat message received' via a variável global $node.\n// Esta é a forma mais robusta quando this.getInputData() não está disponível.\nif ($node && $node[\"When chat message received\"] && $node[\"When chat message received\"].json && $node[\"When chat message received\"].json.chatInput) {\n    chatInput = $node[\"When chat message received\"].json.chatInput;\n} else {\n    // Fallback ou mensagem de erro se o chatInput não for encontrado.\n    console.error(\"Erro: chatInput do nó 'When chat message received' não encontrado ou a estrutura esperada está ausente.\");\n    chatInput = \"Pergunta não informada ou vazia\"; // Definir um valor padrão para evitar erros no prompt\n}\n\n// 2. Extrair o conteúdo dos arquivos CSV binários\n// O 'items' aqui se refere aos itens que vêm do nó 'Descompactar ZIP'.\nfor (const item of items) {\n    // Verifica se é um arquivo binário e qual seu nome\n    if (item.binary && Object.keys(item.binary).length > 0) {\n        const fileKey = Object.keys(item.binary)[0]; // Pega a primeira (e geralmente única) chave do objeto binário\n        const fileData = item.binary[fileKey].data; // Pega o conteúdo base64\n\n        // Decodifica de base64 para string\n        const decodedContent = Buffer.from(fileData, 'base64').toString('utf8');\n\n        // Assumimos que 'file_0' e 'file_1' são os nomes das chaves dos arquivos binários descompactados.\n        // Se seus arquivos descompactados tiverem nomes diferentes no output do Descompactar ZIP,\n        // você precisará ajustar 'file_0' e 'file_1' aqui.\n        if (fileKey.includes('file_0')) { // Assumindo 'file_0' para o cabeçalho (ou o primeiro arquivo)\n            headerCsvContent = decodedContent;\n        } else if (fileKey.includes('file_1')) { // Assumindo 'file_1' para os itens (ou o segundo arquivo)\n            itemsCsvContent = decodedContent;\n        }\n    }\n}\n\n// 3. Formatar os dados para o prompt\n// Garantindo que os dados do cabeçalho e itens sejam incluídos mesmo se vazios.\n// Isso evita que o prompt fique com \"undefined\" ou falhe se um CSV estiver vazio.\nconst formattedCsv = `Dados do cabeçalho:\\n${headerCsvContent || 'Nenhum dado de cabeçalho encontrado.'}\\n\\nDados dos itens:\\n${itemsCsvContent || 'Nenhum dado de itens encontrado.'}`;\n\n// 4. Construir o prompt final para a LLM\nconst systemPrompt = \"Você é um assistente que responde perguntas com base nos dados de notas fiscais fornecidos. Se a resposta não puder ser encontrada nos dados, diga que a informação não está disponível.\";\n\nconst userPrompt = `Analise os dados CSV de nota fiscal a seguir:\n${formattedCsv}\n\nCom base APENAS nos dados fornecidos acima, responda EXATAMENTE à seguinte pergunta do usuário:\n${chatInput}`;\n\n// Retorna a estrutura que o nó OpenAI espera no formato 'messages'\n// O nó OpenAI será configurado para ler estas mensagens.\nreturn [{\n    json: {\n        messages: [\n            { role: \"system\", content: systemPrompt },\n            { role: \"user\", content: userPrompt }\n        ],\n        // Estes campos de depuração são úteis para verificar o output do nó Code\n        // Eles aparecerão na aba 'Output' do nó Code no n8n.\n        _debug_chatInput: chatInput,\n        _debug_formattedCsvData: formattedCsv\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        1320
+      ],
+      "id": "36923d45-ac59-4cb5-95bc-4b2ace3ef93f",
+      "name": "Preparar Prompt Final para LLM"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Baixar ZIP GitHub": {
+      "main": [
+        [
+          {
+            "node": "Descompactar ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descompactar ZIP": {
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt Final para LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Baixar ZIP GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Resposta para Usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Prompt Final para LLM": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "161ae931-a7df-48f3-b96b-209641c8d663",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75b7b56025604bc6e79e5d681ce98c63047c674b77700d26b2cac382e45bd788"
+  },
+  "id": "lBpmbXcq6UBnMRkB",
+  "tags": []
+}
